@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>シフト表ビューワー</title>
+<style>
+:root{--line:#d7dde2;--head:#edf2f5;--highlight:#dcecf8;--accent:#397b91;--name-width:88px;--row-height:30px}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#263238;background:#f4f6f7;display:flex;flex-direction:column;overflow:hidden}
+header{padding:8px 10px 6px;flex:0 0 auto}h1{margin:0 0 7px;font-size:18px;font-weight:600}
+#drop-zone{border:1px dashed #9aaab3;border-radius:6px;background:#fff;padding:9px 8px;text-align:center;cursor:pointer;color:#40545e;font-size:13px}
+#drop-zone.dragover{border-color:var(--accent);background:#eaf4f7}#file-input{display:none}
+#status{margin:5px 2px 0;font-size:11px;color:#52636b}
+#content-box{margin-top:6px;padding:7px 9px;min-height:43px;max-height:88px;overflow:auto;border:1px solid var(--line);border-radius:5px;background:#fff;font-size:13px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
+#sheet-tabs{display:flex;gap:4px;overflow-x:auto;padding:0 10px 6px;flex:0 0 auto}
+.sheet-tab{border:1px solid #cbd4d9;background:#fff;padding:5px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;font-size:12px}
+.sheet-tab.active{background:#e4eef2;border-color:#8daab6}
+#viewer{margin:0 10px 10px;flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--line);background:#fff;position:relative;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content}
+td,th{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 6px;height:var(--row-height);max-height:var(--row-height);min-width:68px;width:68px;overflow:hidden;text-overflow:clip;white-space:nowrap;vertical-align:middle;font-size:12px;font-weight:400}
+td{cursor:pointer}.name-cell{position:sticky;left:0;z-index:4;width:var(--name-width);min-width:var(--name-width);max-width:var(--name-width);background:#f6f8f9;font-weight:600}
+.top-cell{position:sticky;z-index:3;background:var(--head)}.name-cell.top-cell{z-index:6}
+.selected td,.selected .name-cell{background:var(--highlight)!important}.selected td{box-shadow:inset 0 1px #9bbdd0,inset 0 -1px #9bbdd0}
+#empty{padding:24px 12px;text-align:center;color:#718087;font-size:13px}
+@media(min-width:700px){header,#sheet-tabs{padding-left:14px;padding-right:14px}#viewer{margin-left:14px;margin-right:14px}}
+</style>
+</head>
+<body>
+<header>
+<h1>シフト表ビューワー</h1>
+<div id="drop-zone" role="button" tabindex="0">Excelファイルをタップして選択、またはここにドラッグ＆ドロップ</div>
+<input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
+<div id="status">ファイル未選択</div>
+<div id="content-box" aria-live="polite">セルをタップすると、ここに内容が表示されます。</div>
+</header>
+<nav id="sheet-tabs" aria-label="シート一覧" hidden></nav>
+<main id="viewer"><div id="empty">Excelファイルを開くと、ここにシフト表が表示されます。</div></main>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+(() => {
+ const dropZone=document.getElementById('drop-zone'),fileInput=document.getElementById('file-input'),viewer=document.getElementById('viewer'),status=document.getElementById('status'),contentBox=document.getElementById('content-box'),sheetTabs=document.getElementById('sheet-tabs');
+ let workbook=null,selectedSheet='',selectedRow=-1;
+ dropZone.addEventListener('click',()=>fileInput.click());
+ dropZone.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}});
+ fileInput.addEventListener('change',async e=>{await openFile(e.target.files&&e.target.files[0]);fileInput.value='';});
+ for(const type of ['dragenter','dragover'])dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.add('dragover');});
+ for(const type of ['dragleave','drop'])dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.remove('dragover');});
+ dropZone.addEventListener('drop',async e=>{await openFile(e.dataTransfer.files&&e.dataTransfer.files[0]);});
+
+ async function openFile(file){
+  if(!file)return;
+  if(!window.XLSX){showError('Excel読み込み用ライブラリを読み込めません。インターネット接続を確認してください。');return;}
+  if(!['xlsx','xls','xlsm'].includes(file.name.split('.').pop().toLowerCase())){showError('Excelファイル（.xlsx / .xls / .xlsm）を選択してください。');return;}
+  status.textContent='読み込み中…';
+  try{
+   const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+   if(!wb.SheetNames.length)throw Error('no sheet');
+   workbook=wb;selectedSheet=wb.SheetNames[0];selectedRow=-1;renderTabs();renderSheet();
+   status.textContent=file.name+'　|　シート数：'+workbook.SheetNames.length;
+   contentBox.textContent='セルをタップすると、ここに内容が表示されます。';
+  }catch(err){console.error(err);showError('ファイルを読み込めませんでした。Excelで開けるファイルか確認してください。');}
+ }
+ function renderTabs(){
+  sheetTabs.replaceChildren();sheetTabs.hidden=workbook.SheetNames.length<=1;
+  workbook.SheetNames.forEach(name=>{const b=document.createElement('button');b.type='button';b.className='sheet-tab'+(name===selectedSheet?' active':'');b.textContent=name;b.addEventListener('click',()=>{selectedSheet=name;selectedRow=-1;renderTabs();renderSheet();});sheetTabs.appendChild(b);});
+ }
+ function renderSheet(){
+  const sheet=workbook.Sheets[selectedSheet],range=sheet&&sheet['!ref']?XLSX.utils.decode_range(sheet['!ref']):null;
+  viewer.replaceChildren();
+  if(!range){const d=document.createElement('div');d.id='empty';d.textContent='このシートには表示できるセルがありません。';viewer.appendChild(d);return;}
+  // A-C列は表示せず、Excel上のD列を名前列として固定表示する。
+  const startRow=range.s.r,endRow=range.e.r,startCol=Math.max(3,range.s.c),endCol=range.e.c;
+  const table=document.createElement('table'),tbody=document.createElement('tbody');
+  for(let r=startRow;r<=endRow;r++){
+   const tr=document.createElement('tr');tr.dataset.row=String(r);
+   const name=document.createElement(r<6?'th':'td');name.className='name-cell'+(r<6?' top-cell':'');name.textContent=cellText(sheet,r,3);name.addEventListener('click',()=>{contentBox.textContent=cellText(sheet,r,3)||'（空欄）';if(r>=6)selectRow(r);});tr.appendChild(name);
+   for(let c=startCol;c<=endCol;c++){
+    const td=document.createElement(r<6?'th':'td');if(r<6)td.classList.add('top-cell');
+    td.textContent=cellText(sheet,r,c);td.dataset.address=XLSX.utils.encode_cell({r,c});
+    td.addEventListener('click',()=>{contentBox.textContent=cellText(sheet,r,c)||'（空欄）';if(r>=6)selectRow(r);});
+    tr.appendChild(td);
+   }
+   tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);viewer.appendChild(table);
+  // Excelの結合セルを再現。日付が3～4行結合されていても表示を維持する。
+  (sheet['!merges']||[]).forEach(m=>{
+   if(m.e.c<startCol||m.s.c>endCol)return;
+   const tr=tbody.children[m.s.r-startRow];if(!tr)return;
+   const firstCol=Math.max(m.s.c,startCol),idx=firstCol-startCol+1,cell=tr.children[idx];if(!cell)return;
+   cell.rowSpan=m.e.r-m.s.r+1;cell.colSpan=m.e.c-firstCol+1;
+   for(let rr=m.s.r;rr<=m.e.r;rr++)for(let cc=firstCol;cc<=m.e.c;cc++){
+    if(rr===m.s.r&&cc===firstCol)continue;
+    const targetRow=tbody.children[rr-startRow],target=targetRow&&targetRow.children[cc-startCol+1];if(target)target.remove();
+   }
+  });
+  // 1～6行を固定。日付はExcel上の3～4行結合、曜日は5行目、勤務地は6行目。
+  let top=0;
+  for(let r=startRow;r<=Math.min(5,endRow);r++){
+   const tr=tbody.children[r-startRow];if(!tr)continue;
+   const h=rowHeight(sheet,r);
+   tr.querySelectorAll('th,td').forEach(cell=>{cell.style.position='sticky';cell.style.top=top+'px';});
+   top+=h;
+  }
+  if(selectedRow>=startRow&&selectedRow<=endRow){const tr=tbody.querySelector('tr[data-row="'+selectedRow+'"]');if(tr)tr.classList.add('selected');}
+ }
+ function rowHeight(sheet,r){const h=sheet['!rows']&&sheet['!rows'][r]&&sheet['!rows'][r].hpt;return h?Math.max(24,Math.min(40,Math.round(h*96/72))):30;}
+ function cellText(sheet,r,c){const cell=sheet[XLSX.utils.encode_cell({r,c})];if(!cell)return'';if(cell.w!==undefined)return String(cell.w);if(cell.v===null||cell.v===undefined)return'';if(cell.v instanceof Date)return cell.v.toLocaleDateString('ja-JP');return String(cell.v);}
+ function selectRow(row){selectedRow=row;const old=viewer.querySelector('tr.selected');if(old)old.classList.remove('selected');const tr=viewer.querySelector('tr[data-row="'+row+'"]');if(tr)tr.classList.add('selected');}
+ function showError(message){status.textContent=message;contentBox.textContent=message;viewer.replaceChildren();const d=document.createElement('div');d.id='empty';d.textContent=message;viewer.appendChild(d);}
+})();
+</script>
+</body>
+</html>
