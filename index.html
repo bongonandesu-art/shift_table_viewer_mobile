@@ -2,114 +2,641 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>シフト表ビューワー</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>シフト表ビューワー v7</title>
 <style>
-:root{--line:#d7dde2;--head:#edf2f5;--highlight:#dcecf8;--accent:#397b91;--name-width:88px;--row-height:30px}
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#263238;background:#f4f6f7;display:flex;flex-direction:column;overflow:hidden}
-header{padding:8px 10px 6px;flex:0 0 auto}h1{margin:0 0 7px;font-size:18px;font-weight:600}
-#drop-zone{border:1px dashed #9aaab3;border-radius:6px;background:#fff;padding:9px 8px;text-align:center;cursor:pointer;color:#40545e;font-size:13px}
-#drop-zone.dragover{border-color:var(--accent);background:#eaf4f7}#file-input{display:none}
-#status{margin:5px 2px 0;font-size:11px;color:#52636b}
-#content-box{margin-top:6px;padding:7px 9px;min-height:43px;max-height:88px;overflow:auto;border:1px solid var(--line);border-radius:5px;background:#fff;font-size:13px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
-#sheet-tabs{display:flex;gap:4px;overflow-x:auto;padding:0 10px 6px;flex:0 0 auto}
-.sheet-tab{border:1px solid #cbd4d9;background:#fff;padding:5px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;font-size:12px}
-.sheet-tab.active{background:#e4eef2;border-color:#8daab6}
-#viewer{margin:0 10px 10px;flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--line);background:#fff;position:relative;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content}
-td,th{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 6px;height:var(--row-height);max-height:var(--row-height);min-width:68px;width:68px;overflow:hidden;text-overflow:clip;white-space:nowrap;vertical-align:middle;font-size:12px;font-weight:400}
-td{cursor:pointer}.name-cell{position:sticky;left:0;z-index:4;width:var(--name-width);min-width:var(--name-width);max-width:var(--name-width);background:#f6f8f9;font-weight:600}
-.top-cell{position:sticky;z-index:3;background:var(--head)}.name-cell.top-cell{z-index:6}
-.selected td,.selected .name-cell{background:var(--highlight)!important}.selected td{box-shadow:inset 0 1px #9bbdd0,inset 0 -1px #9bbdd0}
-#empty{padding:24px 12px;text-align:center;color:#718087;font-size:13px}
-@media(min-width:700px){header,#sheet-tabs{padding-left:14px;padding-right:14px}#viewer{margin-left:14px;margin-right:14px}}
+:root {
+  --line:#d5dce0;
+  --head:#eaf0f3;
+  --highlight:#dcecf8;
+  --text:#263238;
+  --name-width:94px;
+  --date-width:62px;
+  --row-height:32px;
+  --font-size:14px;
+  --header-font-size:14px;
+}
+* { box-sizing:border-box; }
+html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+body {
+  color:var(--text); background:#f4f6f7;
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+#app { display:flex; flex-direction:column; width:100%; height:100%; zoom:var(--app-zoom, 1); }
+#top { flex:0 0 auto; padding:3px 5px 2px; }
+h1 { font-size:13px; line-height:1.15; font-weight:600; margin:0 0 3px; }
+#controls { display:flex; align-items:center; gap:4px; }
+button {
+  font:inherit; color:inherit; cursor:pointer; touch-action:manipulation;
+}
+#file-button, #size-button {
+  min-height:28px; padding:3px 5px; border:1px solid #b8c6cd;
+  border-radius:4px; background:#fff; font-size:11px;
+}
+#file-button { flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:clip; white-space:nowrap; letter-spacing:-0.04em; }
+#size-controls { display:flex; flex:0 0 auto; align-items:center; gap:2px; }
+#size-controls button { min-width:27px; padding:3px 5px; font-size:15px; line-height:1.1; }
+#size-value { min-width:42px; text-align:center; font-size:11px; color:#52636b; }
+#file-input { display:none; }
+#status { margin-top:1px; color:#60717a; font-size:9px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#cell-content {
+  margin-top:3px; min-height:26px; max-height:36px; overflow:auto;
+  padding:3px 5px; border:1px solid var(--line); border-radius:4px;
+  background:#fff; font-size:12px; line-height:1.2; white-space:pre-wrap; overflow-wrap:anywhere;
+}
+#staff-summary {
+  display:none; flex:0 0 auto; margin:0 5px 2px; padding:1px 3px;
+  border:1px solid var(--line); border-radius:3px; background:#fff; overflow-x:auto;
+  scrollbar-width:thin;
+}
+#staff-summary.visible { display:block; }
+#summary-name { font-size:11px; font-weight:600; line-height:1.05; margin-bottom:1px; white-space:nowrap; }
+#summary-items { display:flex; gap:2px; align-items:stretch; width:max-content; }
+.summary-item {
+  min-width:48px; border-left:1px solid #dce2e5; padding:0 3px;
+  display:flex; flex-direction:column; gap:0; text-align:center;
+  font-size:13px; line-height:1.05; cursor:pointer; touch-action:manipulation;
+}
+.summary-item:active { background:#eaf3f8; }
+.summary-item.active { background:#263238; color:#fff; border-color:#263238; border-radius:3px; }
+.summary-item.active .summary-weekday { color:#e0e7eb; }
+.summary-date { font-size:14px; font-weight:600; line-height:1.1; }
+.summary-weekday { color:#52636b; }
+.summary-value { font-size:14px; font-weight:600; }
+#sheet-tabs {
+  flex:0 0 auto; display:flex; gap:2px; overflow-x:auto;
+  padding:0 5px 2px; scrollbar-width:thin;
+}
+.sheet-tab {
+  flex:0 0 auto; padding:3px 5px; border:1px solid #cbd4d9; border-radius:3px;
+  background:#fff; white-space:nowrap; font-size:10px;
+}
+.sheet-tab.active { background:#263238; color:#fff; border-color:#263238; }
+#viewer {
+  flex:1 1 auto; min-height:0; min-width:0; overflow:auto;
+  margin:0 5px 4px; border:1px solid var(--line); background:#fff;
+  position:relative; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
+table { border-collapse:separate; border-spacing:0; table-layout:fixed; width:max-content; }
+td, th {
+  height:var(--row-height); max-height:var(--row-height); padding:2px 3px;
+  border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  font-size:var(--font-size); font-weight:400; white-space:nowrap;
+  overflow:hidden; text-overflow:clip; vertical-align:middle;
+}
+.date-header-cell, .weekday-header-cell, .location-header-cell {
+  height:var(--row-height); max-height:var(--row-height); padding-top:2px; padding-bottom:2px;
+}
+tr.date-pair-row { height:calc(var(--row-height) / 2); }
+tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--row-height) / 2); max-height:calc(var(--row-height) / 2); padding-top:0; padding-bottom:0; }
+.name-cell {
+  position:sticky; left:0; z-index:5; width:var(--name-width);
+  min-width:var(--name-width); max-width:var(--name-width);
+  padding:2px 2px; background:#f7f9fa; text-align:left;
+}
+.data-cell {
+  width:var(--date-width); min-width:var(--date-width); max-width:var(--date-width);
+  text-align:center;
+}
+.top-cell { position:sticky; z-index:3; background:var(--head); }
+.name-cell.top-cell { z-index:7; }
+.staff-name-line { display:flex; align-items:center; min-width:0; gap:1px; }
+.staff-name { min-width:0; overflow:hidden; white-space:nowrap; font-size:14px; letter-spacing:-0.025em; }
+.staff-count { flex:0 0 auto; font-size:10px; color:#52636b; letter-spacing:-0.025em; }
+.selected td, .selected .name-cell { background:var(--highlight)!important; }
+.selected td { box-shadow:inset 0 1px #9bbdd0,inset 0 -1px #9bbdd0; }
+#empty { padding:15px 10px; text-align:center; color:#718087; font-size:12px; }
+body.size-80 { --name-width:82px; --date-width:54px; --row-height:27px; --font-size:12px; --header-font-size:12px; }
+body.size-90 { --name-width:88px; --date-width:58px; --row-height:29px; --font-size:13px; --header-font-size:13px; }
+body.size-110 { --name-width:100px; --date-width:66px; --row-height:35px; --font-size:15px; --header-font-size:15px; }
+body.size-120 { --name-width:106px; --date-width:70px; --row-height:38px; --font-size:16px; --header-font-size:16px; }
+body.size-130 { --name-width:112px; --date-width:74px; --row-height:41px; --font-size:17px; --header-font-size:17px; }
+body.size-140 { --name-width:118px; --date-width:78px; --row-height:44px; --font-size:18px; --header-font-size:18px; }
+body.size-150 { --name-width:124px; --date-width:82px; --row-height:47px; --font-size:19px; --header-font-size:19px; }
 </style>
 </head>
 <body>
-<header>
-<h1>シフト表ビューワー</h1>
-<div id="drop-zone" role="button" tabindex="0">Excelファイルをタップして選択、またはここにドラッグ＆ドロップ</div>
-<input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
-<div id="status">ファイル未選択</div>
-<div id="content-box" aria-live="polite">セルをタップすると、ここに内容が表示されます。</div>
+<div id="app">
+<header id="top">
+  <h1>シフト表ビューワー v7</h1>
+  <div id="controls">
+    <button id="file-button" type="button">Excelファイルを選択</button>
+    <div id="size-controls" aria-label="表示サイズ">
+      <button id="size-minus" type="button" aria-label="表示サイズを小さく">−</button>
+      <span id="size-value">100%</span>
+      <button id="size-plus" type="button" aria-label="表示サイズを大きく">＋</button>
+    </div>
+    <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
+  </div>
+  <div id="status">ファイル未選択</div>
+  <div id="cell-content" aria-live="polite">セルをタップすると、内容がここに表示されます。</div>
 </header>
+<section id="staff-summary" aria-live="polite">
+  <div id="summary-name"></div>
+  <div id="summary-items"></div>
+</section>
 <nav id="sheet-tabs" aria-label="シート一覧" hidden></nav>
-<main id="viewer"><div id="empty">Excelファイルを開くと、ここにシフト表が表示されます。</div></main>
+<main id="viewer"><div id="empty">Excelファイルを選択してください。</div></main>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 (() => {
- const dropZone=document.getElementById('drop-zone'),fileInput=document.getElementById('file-input'),viewer=document.getElementById('viewer'),status=document.getElementById('status'),contentBox=document.getElementById('content-box'),sheetTabs=document.getElementById('sheet-tabs');
- let workbook=null,selectedSheet='',selectedRow=-1;
- dropZone.addEventListener('click',()=>fileInput.click());
- dropZone.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}});
- fileInput.addEventListener('change',async e=>{await openFile(e.target.files&&e.target.files[0]);fileInput.value='';});
- for(const type of ['dragenter','dragover'])dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.add('dragover');});
- for(const type of ['dragleave','drop'])dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.remove('dragover');});
- dropZone.addEventListener('drop',async e=>{await openFile(e.dataTransfer.files&&e.dataTransfer.files[0]);});
+  const $ = id => document.getElementById(id);
+  const fileButton = $('file-button');
+  const fileInput = $('file-input');
+  const sizeMinus = $('size-minus');
+  const sizePlus = $('size-plus');
+  const sizeValue = $('size-value');
+  const status = $('status');
+  const cellContent = $('cell-content');
+  const staffSummary = $('staff-summary');
+  const summaryName = $('summary-name');
+  const summaryItems = $('summary-items');
+  const sheetTabs = $('sheet-tabs');
+  const viewer = $('viewer');
 
- async function openFile(file){
-  if(!file)return;
-  if(!window.XLSX){showError('Excel読み込み用ライブラリを読み込めません。インターネット接続を確認してください。');return;}
-  if(!['xlsx','xls','xlsm'].includes(file.name.split('.').pop().toLowerCase())){showError('Excelファイル（.xlsx / .xls / .xlsm）を選択してください。');return;}
-  status.textContent='読み込み中…';
-  try{
-   const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
-   if(!wb.SheetNames.length)throw Error('no sheet');
-   workbook=wb;selectedSheet=wb.SheetNames[0];selectedRow=-1;renderTabs();renderSheet();
-   status.textContent=file.name+'　|　シート数：'+workbook.SheetNames.length;
-   contentBox.textContent='セルをタップすると、ここに内容が表示されます。';
-  }catch(err){console.error(err);showError('ファイルを読み込めませんでした。Excelで開けるファイルか確認してください。');}
- }
- function renderTabs(){
-  sheetTabs.replaceChildren();sheetTabs.hidden=workbook.SheetNames.length<=1;
-  workbook.SheetNames.forEach(name=>{const b=document.createElement('button');b.type='button';b.className='sheet-tab'+(name===selectedSheet?' active':'');b.textContent=name;b.addEventListener('click',()=>{selectedSheet=name;selectedRow=-1;renderTabs();renderSheet();});sheetTabs.appendChild(b);});
- }
- function renderSheet(){
-  const sheet=workbook.Sheets[selectedSheet],range=sheet&&sheet['!ref']?XLSX.utils.decode_range(sheet['!ref']):null;
-  viewer.replaceChildren();
-  if(!range){const d=document.createElement('div');d.id='empty';d.textContent='このシートには表示できるセルがありません。';viewer.appendChild(d);return;}
-  // A-C列は表示せず、Excel上のD列を名前列として固定表示する。
-  const startRow=range.s.r,endRow=range.e.r,startCol=Math.max(3,range.s.c),endCol=range.e.c;
-  const table=document.createElement('table'),tbody=document.createElement('tbody');
-  for(let r=startRow;r<=endRow;r++){
-   const tr=document.createElement('tr');tr.dataset.row=String(r);
-   const name=document.createElement(r<6?'th':'td');name.className='name-cell'+(r<6?' top-cell':'');name.textContent=cellText(sheet,r,3);name.addEventListener('click',()=>{contentBox.textContent=cellText(sheet,r,3)||'（空欄）';if(r>=6)selectRow(r);});tr.appendChild(name);
-   for(let c=startCol;c<=endCol;c++){
-    const td=document.createElement(r<6?'th':'td');if(r<6)td.classList.add('top-cell');
-    td.textContent=cellText(sheet,r,c);td.dataset.address=XLSX.utils.encode_cell({r,c});
-    td.addEventListener('click',()=>{contentBox.textContent=cellText(sheet,r,c)||'（空欄）';if(r>=6)selectRow(r);});
-    tr.appendChild(td);
-   }
-   tbody.appendChild(tr);
-  }
-  table.appendChild(tbody);viewer.appendChild(table);
-  // Excelの結合セルを再現。日付が3～4行結合されていても表示を維持する。
-  (sheet['!merges']||[]).forEach(m=>{
-   if(m.e.c<startCol||m.s.c>endCol)return;
-   const tr=tbody.children[m.s.r-startRow];if(!tr)return;
-   const firstCol=Math.max(m.s.c,startCol),idx=firstCol-startCol+1,cell=tr.children[idx];if(!cell)return;
-   cell.rowSpan=m.e.r-m.s.r+1;cell.colSpan=m.e.c-firstCol+1;
-   for(let rr=m.s.r;rr<=m.e.r;rr++)for(let cc=firstCol;cc<=m.e.c;cc++){
-    if(rr===m.s.r&&cc===firstCol)continue;
-    const targetRow=tbody.children[rr-startRow],target=targetRow&&targetRow.children[cc-startCol+1];if(target)target.remove();
-   }
+  let workbook = null;
+  let selectedSheet = '';
+  let selectedRow = null;
+  let currentFileName = '';
+  let sizeMode = 2;
+  let sheetMeta = null;
+
+  const sizePercents = ['80%', '90%', '100%', '110%', '120%', '130%', '140%', '150%', '160%', '170%', '180%', '190%', '200%'];
+  const sizeClasses = ['size-80', 'size-90', '', 'size-110', 'size-120', 'size-130', 'size-140', 'size-150', '', '', '', '', ''];
+  fileButton.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async event => {
+    await openFile(event.target.files && event.target.files[0]);
+    fileInput.value = '';
   });
-  // 1～6行を固定。日付はExcel上の3～4行結合、曜日は5行目、勤務地は6行目。
-  let top=0;
-  for(let r=startRow;r<=Math.min(5,endRow);r++){
-   const tr=tbody.children[r-startRow];if(!tr)continue;
-   const h=rowHeight(sheet,r);
-   tr.querySelectorAll('th,td').forEach(cell=>{cell.style.position='sticky';cell.style.top=top+'px';});
-   top+=h;
+  function setSizeMode(nextMode) {
+    sizeMode = Math.max(0, Math.min(sizePercents.length - 1, nextMode));
+    sizeClasses.forEach(cls => { if (cls) document.body.classList.remove(cls); });
+    if (sizeClasses[sizeMode]) document.body.classList.add(sizeClasses[sizeMode]);
+    sizeValue.textContent = sizePercents[sizeMode];
+    const zoom = parseInt(sizePercents[sizeMode], 10) / 100;
+    document.documentElement.style.setProperty('--app-zoom', String(zoom));
+    const app = document.getElementById('app');
+    if (app) { app.style.width = (100 / zoom) + '%'; app.style.height = (100 / zoom) + '%'; }
+    if (workbook) renderSheet();
   }
-  if(selectedRow>=startRow&&selectedRow<=endRow){const tr=tbody.querySelector('tr[data-row="'+selectedRow+'"]');if(tr)tr.classList.add('selected');}
- }
- function rowHeight(sheet,r){const h=sheet['!rows']&&sheet['!rows'][r]&&sheet['!rows'][r].hpt;return h?Math.max(24,Math.min(40,Math.round(h*96/72))):30;}
- function cellText(sheet,r,c){const cell=sheet[XLSX.utils.encode_cell({r,c})];if(!cell)return'';if(cell.w!==undefined)return String(cell.w);if(cell.v===null||cell.v===undefined)return'';if(cell.v instanceof Date)return cell.v.toLocaleDateString('ja-JP');return String(cell.v);}
- function selectRow(row){selectedRow=row;const old=viewer.querySelector('tr.selected');if(old)old.classList.remove('selected');const tr=viewer.querySelector('tr[data-row="'+row+'"]');if(tr)tr.classList.add('selected');}
- function showError(message){status.textContent=message;contentBox.textContent=message;viewer.replaceChildren();const d=document.createElement('div');d.id='empty';d.textContent=message;viewer.appendChild(d);}
+  sizeMinus.addEventListener('click', () => setSizeMode(sizeMode - 1));
+  sizePlus.addEventListener('click', () => setSizeMode(sizeMode + 1));
+  setSizeMode(sizeMode);
+
+  async function openFile(file) {
+    if (!file) return;
+    if (!window.XLSX) {
+      showError('Excel読み込み機能を読み込めません。インターネット接続を確認してください。');
+      return;
+    }
+    if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) {
+      showError('Excelファイル（.xlsx / .xls / .xlsm）を選択してください。');
+      return;
+    }
+    status.textContent = '読み込み中…';
+    try {
+      const bytes = await file.arrayBuffer();
+      workbook = XLSX.read(bytes, {type:'array', cellDates:true, cellNF:true, cellText:true});
+      if (!workbook.SheetNames.length) throw new Error('シートがありません');
+      currentFileName = file.name;
+      selectedSheet = findCurrentMonthSheet(workbook.SheetNames) || workbook.SheetNames[0];
+      selectedRow = null;
+      fileButton.textContent = file.name;
+      renderTabs();
+      renderSheet();
+      cellContent.textContent = 'セルをタップすると、内容がここに表示されます。';
+      status.textContent = 'シート数：' + workbook.SheetNames.length + '　|　行をタップするとハイライト';
+    } catch (error) {
+      console.error(error);
+      showError('ファイルを読み込めませんでした。Excelで開けるファイルか確認してください。');
+    }
+  }
+
+  function renderTabs() {
+    sheetTabs.replaceChildren();
+    sheetTabs.hidden = workbook.SheetNames.length <= 1;
+    workbook.SheetNames.forEach(name => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sheet-tab' + (name === selectedSheet ? ' active' : '');
+      button.textContent = name;
+      button.addEventListener('click', () => {
+        selectedSheet = name;
+        selectedRow = null;
+        staffSummary.classList.remove('visible');
+        renderTabs();
+        renderSheet();
+      });
+      sheetTabs.appendChild(button);
+    });
+    requestAnimationFrame(() => {
+      const activeTab = sheetTabs.querySelector('.sheet-tab.active');
+      if (activeTab) activeTab.scrollIntoView({block:'nearest', inline:'center', behavior:'auto'});
+    });
+  }
+
+  function renderSheet() {
+    const sheet = workbook.Sheets[selectedSheet];
+    viewer.replaceChildren();
+    if (!sheet || !sheet['!ref']) {
+      showEmpty('このシートには表示できるセルがありません。');
+      return;
+    }
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    const hiddenRows = new Set();
+    const hiddenCols = new Set();
+
+    // Excel row numbers are 1-based here. Hide rows 1, 2 and 8, plus any other rows hidden in the workbook.
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const rowInfo = sheet['!rows'] && sheet['!rows'][r];
+      if (r === 0 || r === 1 || r === 7 || (rowInfo && rowInfo.hidden)) hiddenRows.add(r);
+    }
+    // Ignore hidden columns in the source workbook, and always omit A-C from the displayed view.
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const colInfo = sheet['!cols'] && sheet['!cols'][c];
+      if (c < 3 || (colInfo && colInfo.hidden)) hiddenCols.add(c);
+    }
+
+    const visibleRows = [];
+    for (let r = range.s.r; r <= range.e.r; r++) if (!hiddenRows.has(r)) visibleRows.push(r);
+    const visibleCols = [];
+    for (let c = range.s.c; c <= range.e.c; c++) if (!hiddenCols.has(c)) visibleCols.push(c);
+
+    if (!visibleRows.length || !visibleCols.length) {
+      showEmpty('表示できる行または列がありません。');
+      return;
+    }
+
+    // Build a coordinate map so date merges and other merged cells keep their source positions.
+    const mergeMap = new Map();
+    const covered = new Set();
+    (sheet['!merges'] || []).forEach(merge => {
+      const rList = visibleRows.filter(r => r >= merge.s.r && r <= merge.e.r);
+      const cList = visibleCols.filter(c => c >= merge.s.c && c <= merge.e.c);
+      if (!rList.length || !cList.length) return;
+      const anchorR = rList[0], anchorC = cList[0];
+      mergeMap.set(anchorR + ':' + anchorC, {rows:rList, cols:cList, source:merge});
+      rList.forEach(r => cList.forEach(c => {
+        if (r !== anchorR || c !== anchorC) covered.add(r + ':' + c);
+      }));
+    });
+
+    sheetMeta = {sheet, visibleRows, visibleCols, hiddenRows, hiddenCols, range, mergeMap};
+
+    const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
+    const trBySourceRow = new Map();
+
+    visibleRows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.dataset.sourceRow = String(r);
+      if (r === 2 || r === 3) tr.classList.add('date-pair-row');
+      trBySourceRow.set(r, tr);
+
+      visibleCols.forEach(c => {
+        if (covered.has(r + ':' + c)) return;
+        const isNameCol = c === 3;
+        const isHeaderRow = r >= 2 && r <= 5; // Excel rows 3-6
+        const cell = document.createElement(isHeaderRow ? 'th' : 'td');
+        cell.className = (isNameCol ? 'name-cell' : 'data-cell') + (isHeaderRow ? ' top-cell' : '');
+        if (r === 2 || r === 3) cell.classList.add('date-header-cell');
+        if (r === 4) cell.classList.add('weekday-header-cell');
+        if (r === 5) cell.classList.add('location-header-cell');
+        cell.dataset.sourceRow = String(r);
+        cell.dataset.sourceCol = String(c);
+
+        const merge = mergeMap.get(r + ':' + c);
+        if (merge) {
+          cell.rowSpan = merge.rows.length;
+          cell.colSpan = merge.cols.length;
+        }
+        if (isNameCol && r >= 8 && !isBlankRow(sheet, r, visibleCols)) {
+          const name = getCellDisplay(sheet, r, 3);
+          const count = countStaffCells(sheet, r, visibleCols);
+          const line = document.createElement('div');
+          line.className = 'staff-name-line';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'staff-name';
+          nameSpan.textContent = name;
+          const countSpan = document.createElement('span');
+          countSpan.className = 'staff-count';
+          countSpan.textContent = '(' + count + ')';
+          line.append(nameSpan, countSpan);
+          cell.appendChild(line);
+        } else {
+          cell.textContent = getCellDisplay(sheet, r, c);
+        }
+
+        cell.addEventListener('click', () => handleCellTap(r, c));
+        tr.appendChild(cell);
+      });
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    viewer.appendChild(table);
+
+    applyStickyHeaders(visibleRows, trBySourceRow);
+    if (selectedRow !== null && visibleRows.includes(selectedRow)) {
+      const tr = trBySourceRow.get(selectedRow);
+      if (tr) tr.classList.add('selected');
+    }
+    applyColumnWidths();
+  }
+
+  function applyColumnWidths() {
+    // Fixed-width columns: the name column stays readable; every date/shift column has the same width.
+    viewer.querySelectorAll('.name-cell').forEach(cell => {
+      cell.style.width = 'var(--name-width)';
+      cell.style.minWidth = 'var(--name-width)';
+      cell.style.maxWidth = 'var(--name-width)';
+    });
+    viewer.querySelectorAll('.data-cell').forEach(cell => {
+      cell.style.width = 'var(--date-width)';
+      cell.style.minWidth = 'var(--date-width)';
+      cell.style.maxWidth = 'var(--date-width)';
+    });
+  }
+
+  function applyStickyHeaders(visibleRows, trBySourceRow) {
+    let offset = 0;
+    const rowHeights = new Map();
+    visibleRows.forEach(r => {
+      if (r >= 2 && r <= 5) {
+        const tr = trBySourceRow.get(r);
+        if (!tr) return;
+        const height = getRowHeightPx(r);
+        const actualHeight = (r === 2 || r === 3) ? height / 2 : height;
+        rowHeights.set(r, actualHeight);
+        tr.querySelectorAll('th,td').forEach(cell => {
+          cell.style.position = 'sticky';
+          cell.style.top = offset + 'px';
+        });
+        offset += actualHeight;
+      }
+    });
+  }
+
+  function getRowHeightPx(sourceRow) {
+    const css = getComputedStyle(document.body);
+    const value = parseFloat(css.getPropertyValue('--row-height'));
+    return Number.isFinite(value) ? value : 27;
+  }
+
+  function handleCellTap(row, col) {
+    const value = getCellDisplay(sheetMeta.sheet, row, col);
+    cellContent.textContent = value === '' ? '（空欄）' : value;
+
+    // Staff rows start at Excel row 9. Tapping a staff row/cell refreshes its summary.
+    // Header, date, weekday, location, and blank separator rows leave the previous summary intact.
+    if (row >= 8 && col === 3 && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
+      selectedRow = row;
+      updateStaffSummary(row);
+      viewer.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
+      const tr = viewer.querySelector('tr[data-source-row="' + row + '"]');
+      if (tr) tr.classList.add('selected');
+    } else if (row >= 8 && col > 3 && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
+      // Tapping a shift cell within a staff row should also select that staff row and update its summary.
+      selectedRow = row;
+      updateStaffSummary(row);
+      viewer.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
+      const tr = viewer.querySelector('tr[data-source-row="' + row + '"]');
+      if (tr) tr.classList.add('selected');
+    }
+  }
+
+  function updateStaffSummary(row) {
+    const sheet = sheetMeta.sheet;
+    const name = getCellDisplay(sheet, row, 3).trim();
+    if (!name) return;
+
+    summaryName.textContent = name;
+    summaryItems.replaceChildren();
+
+    const entries = [];
+    sheetMeta.visibleCols.forEach(col => {
+      if (col <= 3) return;
+      const value = getCellDisplay(sheet, row, col).trim();
+      if (!value) return;
+      const dateInfo = getDateAndWeekdayForColumn(sheet, col);
+      entries.push({
+        date: dateInfo.date,
+        weekday: dateInfo.weekday,
+        value,
+        col
+      });
+    });
+
+    if (!entries.length) {
+      const empty = document.createElement('div');
+      empty.className = 'summary-item';
+      empty.textContent = '当番なし';
+      summaryItems.appendChild(empty);
+    } else {
+      entries.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'summary-item';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('aria-label', entry.date + 'の勤務地を表示');
+        const showLocation = () => {
+          summaryItems.querySelectorAll('.summary-item.active').forEach(el => el.classList.remove('active'));
+          item.classList.add('active');
+          showLocationFor(row, entry.col);
+        };
+        item.addEventListener('click', showLocation);
+        item.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showLocation(); }
+        });
+        const date = document.createElement('div');
+        date.className = 'summary-date';
+        date.textContent = entry.date || '—';
+        const weekday = document.createElement('div');
+        weekday.className = 'summary-weekday';
+        weekday.textContent = entry.weekday || '';
+        const value = document.createElement('div');
+        value.className = 'summary-value';
+        value.textContent = entry.value;
+        item.append(date, weekday, value);
+        summaryItems.appendChild(item);
+      });
+    }
+    staffSummary.classList.add('visible');
+  }
+
+  function showLocationFor(staffRow, shiftCol) {
+    const sheet = sheetMeta.sheet;
+    const locationRow = 5; // Excel row 6: workplace/location
+    const locationCell = findMergedCellAnchor(sheet, locationRow, shiftCol);
+    const value = locationCell ? getCellDisplay(sheet, locationCell.r, locationCell.c) : getCellDisplay(sheet, locationRow, shiftCol);
+    cellContent.textContent = value.trim() ? value.trim() : '（勤務地は空欄）';
+    // Deliberately do not change selectedRow or hide the summary: the highlighted staff stays selected.
+  }
+
+  function findMergedCellAnchor(sheet, row, col) {
+    for (const merge of sheet['!merges'] || []) {
+      if (merge.s.r <= row && merge.e.r >= row && merge.s.c <= col && merge.e.c >= col) {
+        return {r:merge.s.r, c:merge.s.c};
+      }
+    }
+    return {r:row, c:col};
+  }
+
+  function findCurrentMonthSheet(sheetNames) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const patterns = sheetNames.map(name => ({name, normalized:String(name).replace(/\s/g, '')}));
+    const match = patterns.find(item => {
+      const s = item.normalized;
+      const yearMatch = s.match(/(20\d{2})/);
+      const monthMatch = s.match(/(?:年)?(0?[1-9]|1[0-2])月度?/);
+      return yearMatch && monthMatch && Number(yearMatch[1]) === year && Number(monthMatch[1]) === month;
+    });
+    return match ? match.name : null;
+  }
+
+  function getDateAndWeekdayForColumn(sheet, col) {
+    // Find the source date header at Excel row 3, including merged date cells spanning several columns.
+    const dateCell = findMergedOrNearestDateCell(sheet, 2, col);
+    const dateValue = dateCell ? getCellDisplay(sheet, dateCell.r, dateCell.c) : '';
+    const dateObj = dateCell ? getActualDate(sheet, dateCell.r, dateCell.c) : null;
+    const weekday = dateObj ? ['日','月','火','水','木','金','土'][dateObj.getDay()] : '';
+    return {date: dateValue, weekday};
+  }
+
+  function findMergedOrNearestDateCell(sheet, headerRow, col) {
+    const merges = sheet['!merges'] || [];
+    for (const merge of merges) {
+      if (merge.s.r <= headerRow && merge.e.r >= headerRow && merge.s.c <= col && merge.e.c >= col) {
+        return {r:merge.s.r, c:merge.s.c};
+      }
+    }
+    const direct = sheet[XLSX.utils.encode_cell({r:headerRow,c:col})];
+    if (direct && !isBlankCell(direct)) return {r:headerRow,c:col};
+
+    // Date headings can be merged across rows 3-4. Search only within the same column and header rows 3-4.
+    for (let r = 2; r <= 3; r++) {
+      const cell = sheet[XLSX.utils.encode_cell({r,c:col})];
+      if (cell && !isBlankCell(cell)) return {r,c:col};
+    }
+    // For a column covered by a horizontal merge whose anchor is in another column, use that merge anchor.
+    for (const merge of merges) {
+      if (merge.s.r >= 2 && merge.s.r <= 3 && merge.s.c <= col && merge.e.c >= col) {
+        const cell = sheet[XLSX.utils.encode_cell({r:merge.s.r,c:merge.s.c})];
+        if (cell && !isBlankCell(cell)) return {r:merge.s.r,c:merge.s.c};
+      }
+    }
+    return null;
+  }
+
+  function getActualDate(sheet, r, c) {
+    const cell = sheet[XLSX.utils.encode_cell({r,c})];
+    if (!cell || cell.v === undefined || cell.v === null) return parseMonthDay(getCellDisplay(sheet,r,c));
+    if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) return cell.v;
+    if (typeof cell.v === 'number' && cell.t === 'n') {
+      // Excel serial date conversion, respecting the standard 1900 date system.
+      const parsed = XLSX.SSF.parse_date_code(cell.v);
+      if (parsed && parsed.y && parsed.m && parsed.d) return new Date(parsed.y, parsed.m - 1, parsed.d);
+    }
+    return parseMonthDay(getCellDisplay(sheet,r,c));
+  }
+
+  function parseMonthDay(text) {
+    const match = String(text || '').match(/^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/);
+    if (!match) return null;
+    const month = Number(match[1]), day = Number(match[2]);
+    const year = inferYearFromSheet();
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+  }
+
+  function inferYearFromSheet() {
+    const source = selectedSheet + ' ' + currentFileName;
+    const match = source.match(/(20\d{2})/);
+    return match ? Number(match[1]) : new Date().getFullYear();
+  }
+
+  function countStaffCells(sheet, row, visibleCols) {
+    let count = 0;
+    visibleCols.forEach(col => {
+      if (col <= 3) return;
+      if (getCellDisplay(sheet, row, col).trim() !== '') count++;
+    });
+    return count;
+  }
+
+  function isBlankRow(sheet, row, visibleCols) {
+    return visibleCols.every(col => getCellDisplay(sheet, row, col).trim() === '');
+  }
+
+  function isBlankCell(cell) {
+    return !cell || cell.v === undefined || cell.v === null || String(cell.v).trim() === '';
+  }
+
+  function getCellDisplay(sheet, row, col) {
+    const cell = sheet[XLSX.utils.encode_cell({r:row,c:col})];
+    if (!cell || cell.v === undefined || cell.v === null) return '';
+    // For date headers, preserve the original month/day display where possible, without trusting "aaa" weekday formatting.
+    if (row === 2 || row === 3) {
+      const date = getActualDateWithoutRecursion(cell);
+      if (date) return (date.getMonth() + 1) + '/' + date.getDate();
+    }
+    // Use raw value instead of cached formatted text: cached text may contain "aaa".
+    if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) {
+      if (row === 4) return ['日','月','火','水','木','金','土'][cell.v.getDay()];
+      return (cell.v.getMonth() + 1) + '/' + cell.v.getDate();
+    }
+    if (row === 4) {
+      const dateInfo = getDateAndWeekdayForColumnNoRecursion(sheet, col);
+      if (dateInfo) return dateInfo;
+    }
+    if (typeof cell.v === 'string') return cell.v;
+    if (cell.t === 'n' && typeof cell.w === 'string' && cell.w.trim() && !/^aaa$/i.test(cell.w.trim())) return cell.w;
+    return String(cell.v);
+  }
+
+  function getActualDateWithoutRecursion(cell) {
+    if (!cell || cell.v === undefined || cell.v === null) return null;
+    if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) return cell.v;
+    if (typeof cell.v === 'number' && cell.t === 'n') {
+      const parsed = XLSX.SSF.parse_date_code(cell.v);
+      if (parsed && parsed.y && parsed.m && parsed.d) return new Date(parsed.y, parsed.m - 1, parsed.d);
+    }
+    const match = String(cell.v).match(/^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/);
+    if (match) {
+      const year = inferYearFromSheet(), month = Number(match[1]), day = Number(match[2]);
+      const date = new Date(year, month - 1, day);
+      if (date.getMonth() === month - 1 && date.getDate() === day) return date;
+    }
+    return null;
+  }
+
+  function getDateAndWeekdayForColumnNoRecursion(sheet, col) {
+    const dateRef = findMergedOrNearestDateCell(sheet, 2, col);
+    if (!dateRef) return '';
+    const date = getActualDate(sheet, dateRef.r, dateRef.c);
+    return date ? ['日','月','火','水','木','金','土'][date.getDay()] : '';
+  }
+
+  function showEmpty(message) {
+    const div = document.createElement('div');
+    div.id = 'empty';
+    div.textContent = message;
+    viewer.replaceChildren(div);
+  }
+
+  function showError(message) {
+    status.textContent = message;
+    cellContent.textContent = message;
+    staffSummary.classList.remove('visible');
+    showEmpty(message);
+  }
 })();
 </script>
+</div>
 </body>
 </html>
