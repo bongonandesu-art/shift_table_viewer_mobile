@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>シフト表ビューワー v7.2.0</title>
+<title>シフト表ビューワー v9.2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
 <style>
 :root {
   --line:#d5dce0;
@@ -16,6 +19,7 @@
   --head-row-height:28px;
   --font-size:14px;
   --header-font-size:14px;
+  --mode-scale:0.8; /* Modeスイッチの大きさ（1で元デザインの等倍） */
 }
 * { box-sizing:border-box; }
 html, body { width:100%; height:100%; margin:0; overflow:hidden; }
@@ -24,7 +28,8 @@ body {
   font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 #app { display:flex; flex-direction:column; width:100%; height:100%; }
-#top { flex:0 0 auto; padding:3px 5px 2px; }
+#top { flex:0 0 auto; display:flex; align-items:flex-start; gap:4px; padding:3px 5px 2px; }
+#top-main { flex:1 1 auto; min-width:0; }
 h1 { font-size:13px; line-height:1.15; font-weight:600; margin:0 0 3px; }
 #controls { display:flex; align-items:center; gap:4px; }
 button {
@@ -35,7 +40,6 @@ button {
   border-radius:4px; background:#fff; font-size:11px;
 }
 #file-button { flex:1 1 auto; min-width:0; text-align:center; overflow:hidden; text-overflow:clip; white-space:nowrap; letter-spacing:-0.04em; }
-#zoom-blank { flex:0 0 100px; align-self:stretch; }
 #file-input { display:none; }
 #status { margin-top:1px; color:#60717a; font-size:9px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #cell-content {
@@ -84,7 +88,7 @@ td, th {
   font-size:var(--font-size); font-weight:400; white-space:nowrap;
   overflow:hidden; text-overflow:clip; vertical-align:middle;
 }
-th.weekday-header-cell, th.location-header-cell {
+th.weekday-header-cell, th.location-header-cell, th.date-single-header-cell {
   height:var(--head-row-height); max-height:var(--head-row-height); padding-top:1px; padding-bottom:1px; line-height:1.15;
 }
 tr.date-pair-row { height:calc(var(--head-row-height) / 2); }
@@ -111,20 +115,68 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   font-size:18px; line-height:1.9; text-align:center; -webkit-tap-highlight-color:rgba(0,0,0,.06);
 }
 #start-prompt:active { background:#eef3f5; }
+/* ─── 2026 / 2027 切り替えスイッチ（右上） ─── */
+#mode-slot {
+  flex:0 0 auto; margin-left:auto;
+  width:calc(70px * var(--mode-scale)); height:calc(114px * var(--mode-scale));
+}
+.mode-selector-container {
+  position:relative; display:flex; flex-direction:column; align-items:center;
+  width:70px; padding-top:18px;
+  transform:scale(var(--mode-scale)); transform-origin:top left;
+}
+.mode-title-outer, .mode-title-inner {
+  font-family:'Dancing Script', cursive; font-size:24px; font-weight:700;
+  position:absolute; left:50%; transform:translateX(-50%);
+  text-align:center; pointer-events:none; white-space:nowrap;
+}
+.mode-title-outer { top:0; color:#3a3a3c; z-index:0; }
+.mode-title-inner { top:-18px; color:#ffffff; z-index:3; clip-path:inset(18px 0 0 0); }
+.segmented-control-vertical {
+  display:flex; flex-direction:column; position:relative;
+  background-color:#dcdce0; border-radius:14px; padding:3px;
+  width:66px; height:96px; z-index:1; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; user-select:none;
+}
+.mode-label {
+  flex:1; text-align:center; line-height:45px; font-size:14px; font-weight:700;
+  color:#b0b0b2; z-index:2; transition:color .25s ease; pointer-events:none; user-select:none;
+}
+.segmented-slider {
+  position:absolute; top:3px; left:3px; width:60px; height:45px;
+  background-color:#3a3a3c; border-radius:11px; box-shadow:0 3px 8px rgba(0,0,0,.2);
+  z-index:1; transition:transform .4s cubic-bezier(0.68,-0.55,0.265,1.55);
+}
+.active-2026 #lbl-26 { color:#ffffff; }
+.active-2026 .segmented-slider { transform:translateY(0); }
+.active-2027 #lbl-27 { color:#ffffff; }
+.active-2027 .segmented-slider { transform:translateY(45px); }
 #empty { padding:15px 10px; text-align:center; color:#718087; font-size:12px; }
 </style>
 </head>
 <body>
 <div id="app">
 <header id="top">
-  <h1>シフト表ビューワー v7.2.0</h1>
-  <div id="controls">
-    <button id="file-button" type="button">Excelファイルを選択</button>
-    <div id="zoom-blank" aria-hidden="true"></div>
-    <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
+  <div id="top-main">
+    <h1>シフト表ビューワー v9.2.0</h1>
+    <div id="controls">
+      <button id="file-button" type="button">Excelファイルを選択</button>
+      <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
+    </div>
+    <div id="status">ファイル未選択</div>
+    <div id="cell-content" aria-live="polite">セルをタップすると、内容がここに表示されます。</div>
   </div>
-  <div id="status">ファイル未選択</div>
-  <div id="cell-content" aria-live="polite">セルをタップすると、内容がここに表示されます。</div>
+  <div id="mode-slot">
+    <div class="mode-selector-container">
+      <div class="mode-title-outer">MODE</div>
+      <div class="segmented-control-vertical active-2026" id="mode-switch-area" role="switch" aria-checked="false" aria-label="2026年版と2027年版の切り替え" tabindex="0">
+        <div class="mode-title-inner">MODE</div>
+        <div class="mode-label" id="lbl-26">2026</div>
+        <div class="mode-label" id="lbl-27">2027</div>
+        <div class="segmented-slider"></div>
+      </div>
+    </div>
+  </div>
 </header>
 <section id="staff-summary" aria-live="polite">
   <div id="summary-name"></div>
@@ -146,8 +198,41 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   const summaryItems = $('summary-items');
   const sheetTabs = $('sheet-tabs');
   const viewer = $('viewer');
+  const modeSwitch = $('mode-switch-area');
 
+  const WEEKDAYS = ['日','月','火','水','木','金','土'];
+  const HINT = 'セルをタップすると、内容がここに表示されます。';
+
+  // 行・列番号はすべて0始まり（Excelの1行目=0、A列=0）。
+  // 2026年版: 月ごとにシートタブ／2027年版: 1枚のシートの右方向に月が並ぶ（I1〜の横統合セルが1か月）。
+  const LAYOUTS = {
+    '2026': {
+      version:'2026',
+      nameCol:3,                 // D列: スタッフ名
+      headerRows:[2,3,4,5],      // 3〜6行目（日付2行・曜日・勤務地）
+      dateRows:[2,3],
+      weekdayRow:4,
+      locationRow:5,
+      staffStart:8               // 9行目から下がスタッフ
+    },
+    '2027': {
+      version:'2027',
+      nameCol:4,                 // E列: スタッフ名
+      headerRows:[1,3],          // 2行目（日付＋曜日）と4行目（勤務地）。曜日行は無し
+      dateRows:[1],
+      weekdayRow:-1,
+      locationRow:3,
+      staffStart:5,              // 6行目から下がスタッフ
+      monthRow:0,                // 1行目: 「m月」「mm月」の横統合セル
+      firstMonthCol:8            // I列から右
+    }
+  };
+
+  let mode = '2026';
+  let layout = LAYOUTS[mode];
   let workbook = null;
+  let tabs = [];                 // {label, sheetName, startCol, endCol, month, year}
+  let selectedTab = 0;
   let selectedSheet = '';
   let selectedRow = null;
   let currentFileName = '';
@@ -156,6 +241,10 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   fileButton.addEventListener('click', () => fileInput.click());
   const startPrompt = $('start-prompt');
   if (startPrompt) startPrompt.addEventListener('click', () => fileInput.click());
+  modeSwitch.addEventListener('click', toggleMode);
+  modeSwitch.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleMode(); }
+  });
   fileInput.addEventListener('change', async event => {
     await openFile(event.target.files && event.target.files[0]);
     fileInput.value = '';
@@ -176,29 +265,184 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
       workbook = XLSX.read(bytes, {type:'array', cellDates:true, cellNF:true, cellText:true, cellStyles:true});
       if (!workbook.SheetNames.length) throw new Error('シートがありません');
       currentFileName = file.name;
-      selectedSheet = findCurrentMonthSheet(workbook.SheetNames) || workbook.SheetNames[0];
-      selectedRow = null;
       fileButton.textContent = file.name;
-      renderTabs();
-      renderSheet();
-      cellContent.textContent = 'セルをタップすると、内容がここに表示されます。';
-      status.textContent = 'シート数：' + workbook.SheetNames.length + '　|　行をタップするとハイライト';
+      applyMode();
     } catch (error) {
       console.error(error);
       showError('ファイルを読み込めませんでした。Excelで開けるファイルか確認してください。');
     }
   }
 
+  // ───────── モード切り替え・タブ生成 ─────────
+  function toggleMode() {
+    mode = mode === '2026' ? '2027' : '2026';
+    layout = LAYOUTS[mode];
+    modeSwitch.classList.toggle('active-2026', mode === '2026');
+    modeSwitch.classList.toggle('active-2027', mode === '2027');
+    modeSwitch.setAttribute('aria-checked', mode === '2027' ? 'true' : 'false');
+    if (workbook) applyMode();
+  }
+
+  // 読み込み済みのExcelを、現在のモードのレイアウトで読み直して表示する
+  function applyMode() {
+    layout = LAYOUTS[mode];
+    selectedRow = null;
+    staffSummary.classList.remove('visible');
+    const detected = detectFileLayout();
+    if (detected && detected !== layout.version) {
+      tabs = [];
+      sheetTabs.replaceChildren();
+      sheetTabs.hidden = true;
+      sheetMeta = null;
+      showError(detected + '年版のシフト表です。右上のスイッチを' + detected + 'に切り替えてください。');
+      return;
+    }
+    tabs = buildTabs();
+    if (!tabs.length) {
+      sheetTabs.replaceChildren();
+      sheetTabs.hidden = true;
+      sheetMeta = null;
+      showError(mode === '2027'
+        ? '2027年版の月（I1から右の「m月」）が見つかりません。2026/2027のスイッチを確認してください。'
+        : 'シートがありません。');
+      return;
+    }
+    selectedTab = pickDefaultTab();
+    renderTabs();
+    renderSheet();
+    cellContent.textContent = HINT;
+    updateStatus();
+  }
+
+  function updateStatus() {
+    const unit = layout.version === '2026' ? 'シート数：' : '月数：';
+    status.textContent = layout.version + '年版　|　' + unit + tabs.length + '　|　行をタップするとハイライト';
+  }
+
+  // ファイルが2026年版か2027年版かを、固定タイトルの文字などから判定する（判定できないときは null）
+  //  2026年版: B2セルに「センター」
+  //  2027年版: H5セルに「人数」／B1セルに「出勤可否」（A〜D列は非表示でも読める）／I1が横統合された「m月」
+  //  どちらも決め手が無いときは、ファイル名に「27年」を含むかどうかで判定
+  function detectFileLayout() {
+    const sheets = workbook.SheetNames.map(n => workbook.Sheets[n]);
+    if (sheets.some(sh => cellHasText(sh, 1, 1, 'センター'))) return '2026';
+    if (sheets.some(sh => cellHasText(sh, 4, 7, '人数') || cellHasText(sh, 0, 1, '出勤可否') || looksLike2027(sh))) return '2027';
+    if (/27年/.test(currentFileName)) return '2027';
+    return null;
+  }
+
+  function cellHasText(sheet, r, c, word) {
+    const cell = sheet && sheet[XLSX.utils.encode_cell({r, c})];
+    if (isBlankCell(cell)) return false;
+    return String(typeof cell.w === 'string' ? cell.w : cell.v).includes(word);
+  }
+
+  function looksLike2027(sheet) {
+    if (!sheet || !sheet['!ref']) return false;
+    const L = LAYOUTS['2027'];
+    const cell = sheet[XLSX.utils.encode_cell({r:L.monthRow, c:L.firstMonthCol})];
+    if (isBlankCell(cell) || !/\d{1,2}\s*月/.test(getMonthInfo(cell).label)) return false;
+    const merge = (sheet['!merges'] || []).find(m =>
+      m.s.r <= L.monthRow && m.e.r >= L.monthRow && m.s.c === L.firstMonthCol);
+    return !!merge && merge.e.c > merge.s.c;
+  }
+
+  function buildTabs() {
+    if (layout.version === '2026') {
+      return workbook.SheetNames.map(name => ({label:name, sheetName:name}));
+    }
+    // 2027年版: 最初に「I1から右に月の見出し」が見つかったシートを使う
+    for (const name of workbook.SheetNames) {
+      const groups = findMonthGroups(workbook.Sheets[name], name);
+      if (groups.length) return groups;
+    }
+    return [];
+  }
+
+  function findMonthGroups(sheet, sheetName) {
+    if (!sheet || !sheet['!ref']) return [];
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    const merges = sheet['!merges'] || [];
+    const mRow = layout.monthRow;
+    const starts = [];
+    for (let c = layout.firstMonthCol; c <= range.e.c; c++) {
+      const merge = merges.find(m => m.s.r <= mRow && m.e.r >= mRow && m.s.c <= c && m.e.c >= c);
+      if (merge && merge.s.c !== c) continue;          // 統合セルの2列目以降は飛ばす
+      const cell = sheet[XLSX.utils.encode_cell({r:mRow, c})];
+      if (isBlankCell(cell)) continue;
+      starts.push(Object.assign({c, mergeEnd: merge ? merge.e.c : null}, getMonthInfo(cell)));
+    }
+    const groups = starts.map((st, i) => {
+      const next = starts[i + 1];
+      const endCol = st.mergeEnd !== null ? st.mergeEnd : (next ? next.c - 1 : range.e.c);
+      let year = st.year;
+      if (!year) {
+        // 月セルが文字列のときは、その月の日付セル（2行目）から年を拾う
+        for (let c = st.c; c <= endCol && !year; c++) {
+          const d = toDateValue(sheet[XLSX.utils.encode_cell({r:layout.dateRows[0], c})]);
+          if (d) year = d.getFullYear();
+        }
+      }
+      return {label:st.label, sheetName, startCol:st.c, endCol, month:st.month, year};
+    });
+    // 同じ「1月」が複数ある（年をまたいで右に伸びた）ときだけ、年を付けて区別する
+    const counts = {};
+    groups.forEach(g => { counts[g.label] = (counts[g.label] || 0) + 1; });
+    groups.forEach(g => {
+      if (counts[g.label] > 1 && g.year) g.label = String(g.year).slice(-2) + '年' + g.label;
+    });
+    return groups;
+  }
+
+  // 月セルの表記（m月 / mm月）をそのままタブ名にする。日付値＋表示形式のセルにも対応。
+  function getMonthInfo(cell) {
+    const d = toDateValue(cell);
+    if (d) {
+      const m = d.getMonth() + 1;
+      const w = typeof cell.w === 'string' ? cell.w.trim() : '';
+      const pad = /mm/i.test(cell.z || '');
+      const label = /^\d{1,2}\s*月$/.test(w) ? w : (pad ? String(m).padStart(2, '0') : String(m)) + '月';
+      return {label, month:m, year:d.getFullYear()};
+    }
+    let label = typeof cell.v === 'string' ? cell.v.trim()
+      : (typeof cell.w === 'string' && cell.w.trim() ? cell.w.trim() : String(cell.v));
+    const match = label.match(/(\d{1,2})\s*月/);
+    if (!match && /^\d{1,2}$/.test(label)) label += '月';
+    const m2 = label.match(/(\d{1,2})\s*月/);
+    return {label, month: m2 ? Number(m2[1]) : null, year:null};
+  }
+
+  // Date型、またはExcelのシリアル値（日付として妥当な大きさ）をDateにする。1〜31などの普通の数値は日付扱いしない。
+  function toDateValue(cell) {
+    if (!cell || cell.v === undefined || cell.v === null) return null;
+    if (cell.v instanceof Date) return Number.isNaN(cell.v.getTime()) ? null : cell.v;
+    if (typeof cell.v === 'number' && cell.v > 20000) {
+      const p = XLSX.SSF.parse_date_code(cell.v);
+      if (p && p.y && p.m && p.d) return new Date(p.y, p.m - 1, p.d);
+    }
+    return null;
+  }
+
+  function pickDefaultTab() {
+    if (layout.version === '2026') {
+      const name = findCurrentMonthSheet(tabs.map(t => t.sheetName));
+      const idx = name ? tabs.findIndex(t => t.sheetName === name) : 0;
+      return idx >= 0 ? idx : 0;
+    }
+    // 2027年版は、起動時は先頭（1月）のタブを開く
+    return 0;
+  }
+
   function renderTabs() {
     sheetTabs.replaceChildren();
-    sheetTabs.hidden = workbook.SheetNames.length <= 1;
-    workbook.SheetNames.forEach(name => {
+    sheetTabs.hidden = layout.version === '2026' ? tabs.length <= 1 : tabs.length < 1;
+    tabs.forEach((tab, index) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'sheet-tab' + (name === selectedSheet ? ' active' : '');
-      button.textContent = name;
+      button.className = 'sheet-tab' + (index === selectedTab ? ' active' : '');
+      button.textContent = tab.label;
       button.addEventListener('click', () => {
-        selectedSheet = name;
+        selectedTab = index;
         selectedRow = null;
         staffSummary.classList.remove('visible');
         renderTabs();
@@ -213,31 +457,48 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   }
 
   function renderSheet() {
-    const sheet = workbook.Sheets[selectedSheet];
+    const tab = tabs[selectedTab];
+    selectedSheet = tab ? tab.sheetName : '';
+    const sheet = tab ? workbook.Sheets[tab.sheetName] : null;
     viewer.replaceChildren();
     if (!sheet || !sheet['!ref']) {
       showEmpty('このシートには表示できるセルがありません。');
       return;
     }
     const range = XLSX.utils.decode_range(sheet['!ref']);
-    const hiddenRows = new Set();
-    const hiddenCols = new Set();
-
-    // Excel row numbers are 1-based here. Hide rows 1, 2 and 8, plus any other rows hidden in the workbook.
-    for (let r = range.s.r; r <= range.e.r; r++) {
-      const rowInfo = sheet['!rows'] && sheet['!rows'][r];
-      if (r === 0 || r === 1 || r === 7 || (rowInfo && rowInfo.hidden)) hiddenRows.add(r);
-    }
-    // Columns hidden in the source workbook stay hidden (needs cellStyles:true when reading), and A-C are always omitted.
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const colInfo = sheet['!cols'] && sheet['!cols'][c];
-      if (c < 3 || (colInfo && colInfo.hidden)) hiddenCols.add(c);
-    }
-
+    const is2026 = layout.version === '2026';
     const visibleRows = [];
-    for (let r = range.s.r; r <= range.e.r; r++) if (!hiddenRows.has(r)) visibleRows.push(r);
     const visibleCols = [];
-    for (let c = range.s.c; c <= range.e.c; c++) if (!hiddenCols.has(c)) visibleCols.push(c);
+
+    if (is2026) {
+      const hiddenRows = new Set();
+      const hiddenCols = new Set();
+      // Excel row numbers are 1-based here. Hide rows 1, 2 and 8, plus any other rows hidden in the workbook.
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const rowInfo = sheet['!rows'] && sheet['!rows'][r];
+        if (r === 0 || r === 1 || r === 7 || (rowInfo && rowInfo.hidden)) hiddenRows.add(r);
+      }
+      // Columns hidden in the source workbook stay hidden (needs cellStyles:true when reading), and A-C are always omitted.
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const colInfo = sheet['!cols'] && sheet['!cols'][c];
+        if (c < 3 || (colInfo && colInfo.hidden)) hiddenCols.add(c);
+      }
+      for (let r = range.s.r; r <= range.e.r; r++) if (!hiddenRows.has(r)) visibleRows.push(r);
+      for (let c = range.s.c; c <= range.e.c; c++) if (!hiddenCols.has(c)) visibleCols.push(c);
+    } else {
+      // 2027年版: 見出し2行（日付・勤務地）＋6行目以降のスタッフ行。Excelで折り畳んだ行・列は折り畳んだまま。
+      layout.headerRows.forEach(r => visibleRows.push(r));
+      for (let r = layout.staffStart; r <= range.e.r; r++) {
+        const rowInfo = sheet['!rows'] && sheet['!rows'][r];
+        if (!(rowInfo && rowInfo.hidden)) visibleRows.push(r);
+      }
+      // スタッフ名(E列)＋選択中の月の列（折り畳まれた平日列は除く）
+      visibleCols.push(layout.nameCol);
+      for (let c = tab.startCol; c <= tab.endCol; c++) {
+        const colInfo = sheet['!cols'] && sheet['!cols'][c];
+        if (c !== layout.nameCol && !(colInfo && colInfo.hidden)) visibleCols.push(c);
+      }
+    }
 
     if (!visibleRows.length || !visibleCols.length) {
       showEmpty('表示できる行または列がありません。');
@@ -258,7 +519,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
       }));
     });
 
-    sheetMeta = {sheet, visibleRows, visibleCols, hiddenRows, hiddenCols, range, mergeMap};
+    sheetMeta = {sheet, visibleRows, visibleCols, range, mergeMap};
 
     const table = document.createElement('table');
     const tbody = document.createElement('tbody');
@@ -267,18 +528,18 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     visibleRows.forEach(r => {
       const tr = document.createElement('tr');
       tr.dataset.sourceRow = String(r);
-      if (r === 2 || r === 3) tr.classList.add('date-pair-row');
+      if (is2026 && (r === 2 || r === 3)) tr.classList.add('date-pair-row');
       trBySourceRow.set(r, tr);
 
       visibleCols.forEach(c => {
         if (covered.has(r + ':' + c)) return;
-        const isNameCol = c === 3;
-        const isHeaderRow = r >= 2 && r <= 5; // Excel rows 3-6
+        const isNameCol = c === layout.nameCol;
+        const isHeaderRow = layout.headerRows.includes(r);
         const cell = document.createElement(isHeaderRow ? 'th' : 'td');
         cell.className = (isNameCol ? 'name-cell' : 'data-cell') + (isHeaderRow ? ' top-cell' : '');
-        if (r === 2 || r === 3) cell.classList.add('date-header-cell');
-        if (r === 4) cell.classList.add('weekday-header-cell');
-        if (r === 5) cell.classList.add('location-header-cell');
+        if (layout.dateRows.includes(r)) cell.classList.add(is2026 ? 'date-header-cell' : 'date-single-header-cell');
+        if (r === layout.weekdayRow) cell.classList.add('weekday-header-cell');
+        if (r === layout.locationRow) cell.classList.add('location-header-cell');
         cell.dataset.sourceRow = String(r);
         cell.dataset.sourceCol = String(c);
 
@@ -287,8 +548,8 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
           cell.rowSpan = merge.rows.length;
           cell.colSpan = merge.cols.length;
         }
-        if (isNameCol && r >= 8 && !isBlankRow(sheet, r, visibleCols)) {
-          const name = getCellDisplay(sheet, r, 3);
+        if (isNameCol && r >= layout.staffStart && !isBlankRow(sheet, r, visibleCols)) {
+          const name = getCellDisplay(sheet, r, layout.nameCol);
           const count = countStaffCells(sheet, r, visibleCols);
           const line = document.createElement('div');
           line.className = 'staff-name-line';
@@ -320,7 +581,8 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     }
     applyColumnWidths();
   }
- function applyColumnWidths() {
+
+  function applyColumnWidths() {
     // Fixed-width columns: the name column stays readable; every date/shift column has the same width.
     viewer.querySelectorAll('.name-cell').forEach(cell => {
       cell.style.width = 'var(--name-width)';
@@ -338,7 +600,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     let offset = 0;
     const rowHeights = new Map();
     visibleRows.forEach(r => {
-      if (r >= 2 && r <= 5) {
+      if (layout.headerRows.includes(r)) {
         const tr = trBySourceRow.get(r);
         if (!tr) return;
         const actualHeight = tr.getBoundingClientRect().height;
@@ -356,15 +618,15 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     const value = getCellDisplay(sheetMeta.sheet, row, col);
     cellContent.textContent = value === '' ? '（空欄）' : value;
 
-    // Staff rows start at Excel row 9. Tapping a staff row/cell refreshes its summary.
+    // Staff rows start at Excel row 9 (2026) / row 6 (2027). Tapping a staff row/cell refreshes its summary.
     // Header, date, weekday, location, and blank separator rows leave the previous summary intact.
-    if (row >= 8 && col === 3 && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
+    if (row >= layout.staffStart && col === layout.nameCol && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
       selectedRow = row;
       updateStaffSummary(row);
       viewer.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
       const tr = viewer.querySelector('tr[data-source-row="' + row + '"]');
       if (tr) tr.classList.add('selected');
-    } else if (row >= 8 && col > 3 && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
+    } else if (row >= layout.staffStart && col > layout.nameCol && !isBlankRow(sheetMeta.sheet, row, sheetMeta.visibleCols)) {
       // Tapping a shift cell within a staff row should also select that staff row and update its summary.
       selectedRow = row;
       updateStaffSummary(row);
@@ -376,7 +638,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
 
   function updateStaffSummary(row) {
     const sheet = sheetMeta.sheet;
-    const name = getCellDisplay(sheet, row, 3).trim();
+    const name = getCellDisplay(sheet, row, layout.nameCol).trim();
     if (!name) return;
 
     summaryName.textContent = name;
@@ -384,7 +646,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
 
     const entries = [];
     sheetMeta.visibleCols.forEach(col => {
-      if (col <= 3) return;
+      if (col <= layout.nameCol) return;
       const value = getCellDisplay(sheet, row, col).trim();
       if (!value) return;
       const dateInfo = getDateAndWeekdayForColumn(sheet, col);
@@ -420,13 +682,18 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
         const date = document.createElement('div');
         date.className = 'summary-date';
         date.textContent = entry.date || '—';
-        const weekday = document.createElement('div');
-        weekday.className = 'summary-weekday';
-        weekday.textContent = entry.weekday || '';
         const value = document.createElement('div');
         value.className = 'summary-value';
         value.textContent = entry.value;
-        item.append(date, weekday, value);
+        if (layout.version === '2026') {
+          const weekday = document.createElement('div');
+          weekday.className = 'summary-weekday';
+          weekday.textContent = entry.weekday || '';
+          item.append(date, weekday, value);
+        } else {
+          // 2027年版は日付に曜日が入っているので、曜日の行は作らない
+          item.append(date, value);
+        }
         summaryItems.appendChild(item);
       });
     }
@@ -435,7 +702,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
 
   function showLocationFor(staffRow, shiftCol) {
     const sheet = sheetMeta.sheet;
-    const locationRow = 5; // Excel row 6: workplace/location
+    const locationRow = layout.locationRow; // 2026: Excel row 6 / 2027: Excel row 4
     const locationCell = findMergedCellAnchor(sheet, locationRow, shiftCol);
     const value = locationCell ? getCellDisplay(sheet, locationCell.r, locationCell.c) : getCellDisplay(sheet, locationRow, shiftCol);
     cellContent.textContent = value.trim() ? value.trim() : '（勤務地は空欄）';
@@ -466,6 +733,11 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   }
 
   function getDateAndWeekdayForColumn(sheet, col) {
+    if (layout.version === '2027') {
+      // 2027年版: 2行目の日付セルに「d(曜)」がセットで入っている
+      const anchor = findMergedCellAnchor(sheet, layout.dateRows[0], col);
+      return {date: getCellDisplay(sheet, anchor.r, anchor.c), weekday: ''};
+    }
     // Find the source date header at Excel row 3, including merged date cells spanning several columns.
     const dateCell = findMergedOrNearestDateCell(sheet, 2, col);
     const dateValue = dateCell ? getCellDisplay(sheet, dateCell.r, dateCell.c) : '';
@@ -530,7 +802,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   function countStaffCells(sheet, row, visibleCols) {
     let count = 0;
     visibleCols.forEach(col => {
-      if (col <= 3) return;
+      if (col <= layout.nameCol) return;
       if (getCellDisplay(sheet, row, col).trim() !== '') count++;
     });
     return count;
@@ -547,6 +819,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
   function getCellDisplay(sheet, row, col) {
     const cell = sheet[XLSX.utils.encode_cell({r:row,c:col})];
     if (!cell || cell.v === undefined || cell.v === null) return '';
+    if (layout.version === '2027') return getCellDisplay2027(cell, row);
     // For date headers, preserve the original month/day display where possible, without trusting "aaa" weekday formatting.
     if (row === 2 || row === 3) {
       const date = getActualDateWithoutRecursion(cell);
@@ -563,6 +836,21 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     }
     if (typeof cell.v === 'string') return cell.v;
     if (cell.t === 'n' && typeof cell.w === 'string' && cell.w.trim() && !/^aaa$/i.test(cell.w.trim())) return cell.w;
+    return String(cell.v);
+  }
+
+  // 2027年版の表示文字。日付行は「d(曜)」「dd(曜)」で表示（日付値でも文字列でも可）。
+  function getCellDisplay2027(cell, row) {
+    if (layout.dateRows.includes(row)) {
+      const d = toDateValue(cell);
+      if (d) {
+        const pad = /(^|[^d])dd([^d]|$)/i.test(cell.z || '');
+        return (pad ? String(d.getDate()).padStart(2, '0') : String(d.getDate())) + '(' + WEEKDAYS[d.getDay()] + ')';
+      }
+    }
+    if (typeof cell.v === 'string') return cell.v;
+    if (cell.v instanceof Date && !Number.isNaN(cell.v.getTime())) return (cell.v.getMonth() + 1) + '/' + cell.v.getDate();
+    if (cell.t === 'n' && typeof cell.w === 'string' && cell.w.trim()) return cell.w;
     return String(cell.v);
   }
 
