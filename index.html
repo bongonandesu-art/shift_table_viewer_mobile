@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>シフト表ビューワー v9.2.0</title>
+<title>シフト表ビューワー v9.3.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
@@ -43,7 +43,7 @@ button {
 #file-input { display:none; }
 #status { margin-top:1px; color:#60717a; font-size:9px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #cell-content {
-  margin-top:3px; min-height:26px; max-height:36px; overflow:auto;
+  margin-top:3px; min-height:26px; max-height:40px; overflow:auto;
   padding:3px 5px; border:1px solid var(--line); border-radius:4px;
   background:#fff; font-size:12px; line-height:1.2; white-space:pre-wrap; overflow-wrap:anywhere;
 }
@@ -158,7 +158,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
 <div id="app">
 <header id="top">
   <div id="top-main">
-    <h1>シフト表ビューワー v9.2.0</h1>
+    <h1>シフト表ビューワー v9.3.0</h1>
     <div id="controls">
       <button id="file-button" type="button">Excelファイルを選択</button>
       <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm">
@@ -218,10 +218,12 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
     '2027': {
       version:'2027',
       nameCol:4,                 // E列: スタッフ名
-      headerRows:[1,3],          // 2行目（日付＋曜日）と4行目（勤務地）。曜日行は無し
+      headerRows:[1,2,3],        // 2行目（日付＋曜日）・3行目（勤務地①）・4行目（勤務地②）。曜日行は無し
       dateRows:[1],
       weekdayRow:-1,
       locationRow:3,
+      locationRows:[2,3],        // 勤務地①=Excel3行目 / 勤務地②=Excel4行目
+      locationTitles:['勤務地①','勤務地②'],
       staffStart:5,              // 6行目から下がスタッフ
       monthRow:0,                // 1行目: 「m月」「mm月」の横統合セル
       firstMonthCol:8            // I列から右
@@ -539,7 +541,7 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
         cell.className = (isNameCol ? 'name-cell' : 'data-cell') + (isHeaderRow ? ' top-cell' : '');
         if (layout.dateRows.includes(r)) cell.classList.add(is2026 ? 'date-header-cell' : 'date-single-header-cell');
         if (r === layout.weekdayRow) cell.classList.add('weekday-header-cell');
-        if (r === layout.locationRow) cell.classList.add('location-header-cell');
+        if (r === layout.locationRow || (layout.locationRows && layout.locationRows.includes(r))) cell.classList.add('location-header-cell');
         cell.dataset.sourceRow = String(r);
         cell.dataset.sourceCol = String(c);
 
@@ -548,7 +550,10 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
           cell.rowSpan = merge.rows.length;
           cell.colSpan = merge.cols.length;
         }
-        if (isNameCol && r >= layout.staffStart && !isBlankRow(sheet, r, visibleCols)) {
+        if (isNameCol && layout.locationRows && layout.locationRows.includes(r)) {
+          // 2027年版: 勤務地見出し行の名前列にタイトルを表示
+          cell.textContent = layout.locationTitles[layout.locationRows.indexOf(r)];
+        } else if (isNameCol && r >= layout.staffStart && !isBlankRow(sheet, r, visibleCols)) {
           const name = getCellDisplay(sheet, r, layout.nameCol);
           const count = countStaffCells(sheet, r, visibleCols);
           const line = document.createElement('div');
@@ -702,10 +707,20 @@ tr.date-pair-row > th, tr.date-pair-row > td { height:calc(var(--head-row-height
 
   function showLocationFor(staffRow, shiftCol) {
     const sheet = sheetMeta.sheet;
-    const locationRow = layout.locationRow; // 2026: Excel row 6 / 2027: Excel row 4
-    const locationCell = findMergedCellAnchor(sheet, locationRow, shiftCol);
-    const value = locationCell ? getCellDisplay(sheet, locationCell.r, locationCell.c) : getCellDisplay(sheet, locationRow, shiftCol);
-    cellContent.textContent = value.trim() ? value.trim() : '（勤務地は空欄）';
+    const readLoc = (row) => {
+      const a = findMergedCellAnchor(sheet, row, shiftCol);
+      const v = a ? getCellDisplay(sheet, a.r, a.c) : getCellDisplay(sheet, row, shiftCol);
+      return v.trim();
+    };
+    if (layout.locationRows) {
+      // 2027年版: 勤務地①（Excel3行目）・勤務地②（Excel4行目）の2行表示
+      cellContent.textContent = layout.locationRows
+        .map((row, i) => layout.locationTitles[i] + '：' + (readLoc(row) || '（空欄）'))
+        .join('\n');
+    } else {
+      const value = readLoc(layout.locationRow); // 2026: Excel row 6
+      cellContent.textContent = value ? value : '（勤務地は空欄）';
+    }
     // Deliberately do not change selectedRow or hide the summary: the highlighted staff stays selected.
   }
 
